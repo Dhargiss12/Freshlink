@@ -1,0 +1,240 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("FRESHLINK_DATABASE_URL")
+}
+
+model User {
+  id             String   @id @default(cuid())
+  name           String
+  age            Int
+  username       String   @unique
+  phone          String
+  email          String   @unique
+  password       String
+  role           String
+  location       String   @default("Pune, Maharashtra")
+  language       String   @default("English")
+  idProofRef     String?
+  profileImage   String?
+  reliabilityScore Float? @default(0)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  listings        Listing[]
+  offers          Offer[]
+  feedbackGiven   Feedback[] @relation("FeedbackGiven")
+  feedbackReceived Feedback[] @relation("FeedbackReceived")
+  ordersAsBuyer   Order[] @relation("BuyerOrders")
+  ordersAsFarmer  Order[] @relation("FarmerOrders")
+  payments        Payment[] @relation("UserPayments")
+  refunds         Refund[]
+  notifications   Notification[]
+  sentMessages    Message[] @relation("SentMessages")
+  receivedMessages Message[] @relation("ReceivedMessages")
+  discounts       Discount[]
+}
+
+model Listing {
+  id           String   @id @default(cuid())
+  farmerId     String
+  crop         String
+  quantity     Float
+  unit         String   @default("kg")
+  location     String
+  harvestDate  DateTime
+  shelfLife    Int
+  expectedPrice Float
+  floorPrice   Float
+  qualityDetails String?
+  packagingDetails String?
+  productImages String?
+  packingVideo String?
+  qualityScore Float?
+  spoilageRisk String   @default("Low")
+  status       String   @default("active")
+  region       String   @default("Pune, Maharashtra")
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  farmer       User     @relation(fields: [farmerId], references: [id])
+  offers       Offer[]
+  orders       Order[]
+  negotiations Negotiation[]
+}
+
+model Offer {
+  id          String   @id @default(cuid())
+  listingId   String
+  buyerId     String
+  offerPrice  Float
+  status      String   @default("pending")
+  createdAt   DateTime @default(now())
+
+  listing     Listing  @relation(fields: [listingId], references: [id])
+  buyer       User     @relation(fields: [buyerId], references: [id])
+  negotiation Negotiation?
+}
+
+model Negotiation {
+  id              String    @id @default(cuid())
+  listingId       String
+  buyerId         String
+  farmerId        String
+  offerId         String?   @unique
+  aiSuggestedMin  Float
+  aiSuggestedMax  Float
+  aiExplanation   String
+  finalPrice      Float?
+  status          String    @default("active")
+  urgency         Float     @default(0.5)
+  timeSinceHarvest Float?
+  createdAt       DateTime  @default(now())
+  completedAt     DateTime?
+
+  messages        NegotiationMessage[]
+  offer           Offer?    @relation(fields: [offerId], references: [id])
+  listing         Listing   @relation(fields: [listingId], references: [id])
+}
+
+model NegotiationMessage {
+  id            String   @id @default(cuid())
+  negotiationId String
+  senderRole    String
+  senderName    String
+  content       String
+  priceSuggested Float?
+  createdAt     DateTime @default(now())
+
+  negotiation   Negotiation @relation(fields: [negotiationId], references: [id])
+}
+
+model Order {
+  id            String   @id @default(cuid())
+  listingId     String
+  buyerId       String
+  farmerId      String
+  agreedPrice   Float
+  quantity      Float
+  totalAmount   Float
+  status        String   @default("confirmed")
+  paymentStatus String   @default("pending")
+  deliveryMethod String  @default("delivery")
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  listing       Listing  @relation(fields: [listingId], references: [id])
+  buyer         User     @relation("BuyerOrders", fields: [buyerId], references: [id])
+  farmer        User     @relation("FarmerOrders", fields: [farmerId], references: [id])
+  payment       Payment?
+  delivery      Delivery?
+  feedback      Feedback?
+  refunds       Refund[]
+}
+
+model Payment {
+  id                 String   @id @default(cuid())
+  orderId            String   @unique
+  userId             String
+  amount             Float
+  paymentMethod      String
+  paymentStatus      String   @default("pending")
+  transactionRef     String?
+  createdAt          DateTime @default(now())
+
+  order              Order    @relation(fields: [orderId], references: [id])
+  user               User     @relation("UserPayments", fields: [userId], references: [id])
+}
+
+model Feedback {
+  id             String   @id @default(cuid())
+  orderId        String   @unique
+  buyerId        String
+  farmerId       String
+  rating         Float    @default(5)
+  qualityRating  Float?
+  freshnessRating Float?
+  packagingRating Float?
+  deliveryRating Float?
+  comment        String?
+  createdAt      DateTime @default(now())
+
+  order          Order    @relation(fields: [orderId], references: [id])
+  buyer          User     @relation("FeedbackGiven", fields: [buyerId], references: [id])
+  farmer         User     @relation("FeedbackReceived", fields: [farmerId], references: [id])
+}
+
+model Refund {
+  id          String   @id @default(cuid())
+  orderId     String
+  buyerId     String
+  reason      String
+  description String?
+  evidence    String?
+  status      String   @default("submitted")
+  amount      Float?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  order       Order    @relation(fields: [orderId], references: [id])
+  buyer       User     @relation(fields: [buyerId], references: [id])
+}
+
+model Delivery {
+  id              String   @id @default(cuid())
+  orderId         String   @unique
+  partner         String   @default("FreshLink Express")
+  status          String   @default("confirmed")
+  currentLocation String?
+  estimatedArrival DateTime?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  order           Order    @relation(fields: [orderId], references: [id])
+}
+
+model Discount {
+  id             String   @id @default(cuid())
+  farmerId       String
+  listingId      String?
+  crop           String
+  discountType   String
+  discountValue  Float
+  minQuantity    Float?
+  maxDiscount    Float?
+  validFrom      DateTime @default(now())
+  validUntil     DateTime?
+  status         String   @default("active")
+  createdAt      DateTime @default(now())
+
+  farmer         User     @relation(fields: [farmerId], references: [id])
+}
+
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String
+  title     String
+  message   String
+  type      String   @default("info")
+  read      Boolean  @default(false)
+  relatedId String?
+  createdAt DateTime @default(now())
+
+  user      User     @relation(fields: [userId], references: [id])
+}
+
+model Message {
+  id          String   @id @default(cuid())
+  senderId    String
+  receiverId  String
+  content     String
+  orderRef    String?
+  read        Boolean  @default(false)
+  createdAt   DateTime @default(now())
+
+  sender      User     @relation("SentMessages", fields: [senderId], references: [id])
+  receiver    User     @relation("ReceivedMessages", fields: [receiverId], references: [id])
+}
